@@ -53,7 +53,7 @@ describe("identity and rooms", () => {
   it("keeps a stable identity across requests", async () => {
     const p = await player(server, "Ava");
     const me = await p.api<{ player: { id: string; name: string } }>("/api/me");
-    expect(me.body.player).toEqual({ id: p.id, name: "Ava" });
+    expect(me.body.player).toEqual({ id: p.id, name: "Ava", username: null });
   });
 
   it("joins, assigns seats, and treats duplicate joins idempotently", async () => {
