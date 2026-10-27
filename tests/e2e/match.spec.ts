@@ -1,5 +1,25 @@
 import { expect, test, type Page } from "@playwright/test";
 
+/**
+ * One passive decision if it's this player's turn: fold (when allowed and asked to), else check,
+ * else call. Buttons are greyed out while a move is in flight and vanish once the server moves
+ * on, so only enabled buttons are clicked and a click never waits long (matters over the internet).
+ */
+async function actPassively(p: Page, foldWhenFacingBet: boolean) {
+  if (!(await p.locator(".actionbar.live").isVisible())) return;
+  const choices = [
+    ...(foldWhenFacingBet ? [p.getByRole("button", { name: /^Fold$/ })] : []),
+    p.getByRole("button", { name: /^Check$/ }),
+    p.getByRole("button", { name: /^Call/ }),
+  ];
+  for (const b of choices) {
+    if ((await b.isVisible()) && (await b.isEnabled())) {
+      await b.click({ timeout: 2000 }).catch(() => {});
+      return;
+    }
+  }
+}
+
 async function chooseName(page: Page, name: string, button: string) {
   await page.getByLabel("Your name at the table").fill(name);
   await page.getByRole("button", { name: button }).click();
@@ -37,14 +57,7 @@ test("a 10-round match: extension vote refused, leaderboard ordered by profit", 
   // Time-based so it also works against a deployment with production pacing between hands.
   const deadline = Date.now() + 150_000;
   while (Date.now() < deadline && !(await finalWindow.isVisible())) {
-    for (const p of [host, guest]) {
-      if (!(await p.locator(".actionbar.live").isVisible())) continue;
-      const fold = p.getByRole("button", { name: /^Fold$/ });
-      const check = p.getByRole("button", { name: /^Check$/ });
-      if (p === host && (await fold.isVisible())) await fold.click();
-      else if (await check.isVisible()) await check.click();
-      else await p.getByRole("button", { name: /^Call/ }).click();
-    }
+    for (const p of [host, guest]) await actPassively(p, p === host);
     await host.waitForTimeout(100);
   }
   await expect(finalWindow).toBeVisible();

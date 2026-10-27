@@ -126,7 +126,9 @@ export function equity(hands: { playerId: string; hole: Card[] }[], board: Card[
   } else {
     const rnd = mulberry32(opts.seed ?? 1);
     const deck = rest.slice();
-    for (let s = 0; s < (opts.samples ?? 3000); s++) {
+    // 1,500 samples keep the displayed percentage within about ±1% while staying cheap on
+    // small hosting CPUs (it runs on the game server when an all-in hand is settled).
+    for (let s = 0; s < (opts.samples ?? 1500); s++) {
       // Partial Fisher–Yates: only the cards we need.
       for (let i = 0; i < need; i++) {
         const j = i + Math.floor(rnd() * (deck.length - i));

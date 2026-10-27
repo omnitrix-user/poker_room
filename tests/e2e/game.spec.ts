@@ -11,9 +11,14 @@ async function playHandToEnd(pages: Page[]) {
     for (const p of pages) if (await p.locator(".pot.result").isVisible()) return;
     for (const p of pages) {
       if (!(await p.locator(".actionbar.live").isVisible())) continue;
-      const check = p.getByRole("button", { name: /^Check$/ });
-      if (await check.isVisible()) await check.click();
-      else await p.getByRole("button", { name: /^Call/ }).click();
+      // Only click enabled buttons, and never wait long: over the internet the button greys out
+      // while the move is in flight and disappears once the server moves on.
+      for (const b of [p.getByRole("button", { name: /^Check$/ }), p.getByRole("button", { name: /^Call/ })]) {
+        if ((await b.isVisible()) && (await b.isEnabled())) {
+          await b.click({ timeout: 2000 }).catch(() => {});
+          break;
+        }
+      }
       await p.locator(".actionbar.live").waitFor({ state: "detached", timeout: 5000 }).catch(() => {});
     }
     await pages[0]!.waitForTimeout(150);
