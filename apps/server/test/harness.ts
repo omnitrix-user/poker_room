@@ -25,6 +25,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     webDist: undefined,
     trustProxy: false,
     allowedOrigins: [],
+    migrationUrl: undefined,
     ...over,
   };
 }

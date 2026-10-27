@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import pg from "pg";
+import { log } from "./log.ts";
 import { MIGRATIONS } from "./migrations.ts";
 
 export interface Queryable {
@@ -14,12 +15,29 @@ export interface Db extends Queryable {
 }
 
 /** Postgres via `pg` when DATABASE_URL is set. */
-export function postgresDb(url: string, maxConnections = Number(process.env.PG_POOL_MAX ?? 10)): Db {
+/**
+ * `sslmode=require` (what Neon and most hosts hand out) is treated by today's `pg` as full
+ * certificate verification, but will mean "encrypt without verifying" in pg v9. Pin the
+ * stronger behaviour explicitly so an upgrade can't silently weaken it.
+ */
+export function strictSsl(url: string): string {
+  return url.replace(/([?&]sslmode=)(require|prefer|verify-ca)(?=&|$)/, "$1verify-full");
+}
+
+export function postgresDb(rawUrl: string, maxConnections = Number(process.env.PG_POOL_MAX ?? 10)): Db {
+  const url = strictSsl(rawUrl);
+  // TLS follows the connection string (`sslmode=require` verifies the server certificate;
+  // use `sslmode=no-verify` for providers with self-signed certificates).
   const pool = new pg.Pool({
     connectionString: url,
     max: maxConnections,
-    ssl: /sslmode=require/.test(url) ? { rejectUnauthorized: false } : undefined,
+    // Release idle connections before serverless Postgres (e.g. Neon) suspends and drops them.
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 20_000,
   });
+  // An idle connection closed by the server (Neon scale-to-zero, a restart) must not crash the
+  // process; the pool simply opens a fresh connection on the next query.
+  pool.on("error", (err) => log.warn("idle database connection closed", { error: err.message }));
   // Return bigint/numeric aggregates as JS numbers; chip totals stay far below 2^53.
   pg.types.setTypeParser(20, (v) => Number(v));
   return {

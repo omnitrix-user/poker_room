@@ -34,6 +34,8 @@ export default defineConfig({
       SHOWDOWN_PAUSE_MS: "500",
       FINAL_VOTE_SECONDS: "20",
       LOG_LEVEL: "silent",
+      // Use the throwaway embedded database, never the one in .env.local.
+      RIVERROOM_NO_ENV_FILE: "1",
     },
   },
 });

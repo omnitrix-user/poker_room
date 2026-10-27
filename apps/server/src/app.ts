@@ -8,7 +8,17 @@ import { Store } from "./store.ts";
 
 export async function createRiverRoom(config: Config, db?: Db) {
   const database = db ?? (config.databaseUrl ? postgresDb(config.databaseUrl) : await embeddedDb(config.dataDir));
-  await migrate(database);
+  if (!db && config.databaseUrl && config.migrationUrl && config.migrationUrl !== config.databaseUrl) {
+    // Schema changes go over the direct connection; the game uses the pooled one.
+    const direct = postgresDb(config.migrationUrl, 1);
+    try {
+      await migrate(direct);
+    } finally {
+      await direct.close();
+    }
+  } else {
+    await migrate(database);
+  }
   const store = new Store(database, config.secretKey);
   const rooms = new RoomManager(store, config);
   const restored = await rooms.restoreAll();

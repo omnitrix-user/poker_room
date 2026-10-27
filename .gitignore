@@ -5,3 +5,6 @@ dist
 test-results
 playwright-report
 *.log
+.neon
+.env.local
+.env.*.local

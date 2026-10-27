@@ -7,6 +7,8 @@ export interface Config {
   isProd: boolean;
   /** Postgres connection string. When unset, an embedded Postgres (PGlite) is used. */
   databaseUrl: string | undefined;
+  /** Direct (non-pooled) connection for schema migrations, if the provider offers one. */
+  migrationUrl: string | undefined;
   /** Directory for the embedded database; undefined = in-memory. */
   dataDir: string | undefined;
   /** 32-byte key used to encrypt live-room snapshots and stored hole cards. */
@@ -35,8 +37,11 @@ export function loadConfig(env = process.env): Config {
     port: Number(env.PORT ?? 3001),
     isProd,
     databaseUrl: env.DATABASE_URL || undefined,
+    migrationUrl: env.DATABASE_URL_UNPOOLED || env.DATABASE_URL || undefined,
     dataDir,
-    secretKey: resolveSecret(env.APP_SECRET, isProd, dataDir),
+    // Development keeps its key under DATA_DIR's parent (or ./.data), also when DATABASE_URL is
+    // set, so saved games can still be decrypted after a restart.
+    secretKey: resolveSecret(env.APP_SECRET, isProd, path.resolve(env.DATA_DIR ?? ".data/pglite")),
     reconnectGraceMs: Number(env.RECONNECT_GRACE_SECONDS ?? 30) * 1000,
     handPauseMs: Number(env.HAND_PAUSE_MS ?? 5000),
     runoutPauseMs: Number(env.RUNOUT_PAUSE_MS ?? 6000),
@@ -49,14 +54,13 @@ export function loadConfig(env = process.env): Config {
   };
 }
 
-function resolveSecret(value: string | undefined, isProd: boolean, dataDir: string | undefined): Buffer {
+function resolveSecret(value: string | undefined, isProd: boolean, dataDir: string): Buffer {
   if (value) {
     if (value.length < 32) throw new Error("APP_SECRET must be at least 32 characters");
     return createHash("sha256").update(value).digest();
   }
   if (isProd) throw new Error("APP_SECRET is required in production");
-  // Development: persist a random key next to the embedded database so restarts can decrypt snapshots.
-  if (!dataDir) return randomBytes(32);
+  // Development: persist a random key locally so restarts can decrypt snapshots.
   const file = path.join(path.dirname(dataDir), "dev-secret");
   if (!existsSync(file)) {
     mkdirSync(path.dirname(file), { recursive: true });
