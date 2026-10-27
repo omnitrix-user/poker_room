@@ -24,7 +24,7 @@ export async function createRiverRoom(config: Config, db?: Db) {
   const restored = await rooms.restoreAll();
   const app = createHttpApp(config, store, rooms);
   const http = createServer(app);
-  const io = attachSockets(http, store, rooms, config.allowedOrigins);
+  const io = attachSockets(http, store, rooms, config.allowedOrigins, config.sessionRecheckMs);
 
   return {
     http,

@@ -164,7 +164,7 @@
 }
 .stats {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   margin: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -175,8 +175,12 @@
   border-right: 1px solid var(--line);
   background: var(--bg-1);
 }
-.stats > div:last-child {
-  border-right: 0;
+.stats > div {
+  border-bottom: 1px solid var(--line);
+}
+.stats dd.best-hand {
+  font-family: var(--font-display);
+  font-size: 19px;
 }
 .stats dt {
   font-size: 12px;
@@ -307,4 +311,48 @@
   .recent-item .faint {
     display: none;
   }
+}
+
+/* ------------------------------------------------------------- identity */
+
+.identity {
+  display: grid;
+  gap: 14px;
+}
+.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: 3px;
+  gap: 3px;
+  border-radius: var(--r-sm);
+  background: #0e120f;
+  border: 1px solid var(--line);
+}
+.seg button {
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 8px 6px;
+  background: transparent;
+  color: var(--text-2);
+  font: 500 13px var(--font-ui);
+  cursor: pointer;
+}
+.seg button.on {
+  background: var(--bg-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.guest-note {
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--brass-dim);
+  background: rgba(199, 165, 107, 0.07);
+  color: var(--text-2);
+}
+.account-page {
+  display: grid;
+  gap: 16px;
+  max-width: 520px;
 }

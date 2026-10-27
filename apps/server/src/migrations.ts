@@ -114,4 +114,12 @@ CREATE TABLE chat_messages (
 -- Match length including agreed extensions (NULL for matches without a limit).
 ALTER TABLE rooms ADD COLUMN rounds_total integer;
 `,
+  `
+-- Optional accounts: a guest becomes an account by choosing a username and password,
+-- keeping its history. Usernames are unique regardless of letter case.
+ALTER TABLE players ADD COLUMN username text;
+ALTER TABLE players ADD COLUMN password_hash text;
+ALTER TABLE players ADD COLUMN registered_at timestamptz;
+CREATE UNIQUE INDEX players_username_lower ON players (lower(username)) WHERE username IS NOT NULL;
+`,
 ];

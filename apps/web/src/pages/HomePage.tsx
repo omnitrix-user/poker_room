@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { DEFAULT_SETTINGS, roomCodeSchema, type RoomSettings, type SessionSummary } from "@riverroom/protocol";
 import { AppBar } from "../components/AppBar.tsx";
+import { IdentityPanel } from "../components/AccountForms.tsx";
 import { NameForm } from "../components/NameForm.tsx";
 import { PlayingCard } from "../components/PlayingCard.tsx";
 import { SettingsFields } from "../components/Settings.tsx";
@@ -33,22 +34,41 @@ export function HomePage() {
         <section className="home-actions">
           {session.status === "loading" ? (
             <div className="panel pad">Loading…</div>
-          ) : !me || renaming ? (
+          ) : !me ? (
             <div className="panel pad">
-              <h2 className="panel-title">{me ? "Change your name" : "First, a name"}</h2>
-              <p className="muted small">No sign-up. This browser keeps a private session so you can come back to your seat.</p>
-              <NameForm initial={me?.name ?? ""} submitLabel={me ? "Save" : "Continue"} onDone={() => setRenaming(false)} />
+              <h2 className="panel-title">Pull up a chair</h2>
+              <IdentityPanel />
+            </div>
+          ) : renaming ? (
+            <div className="panel pad">
+              <h2 className="panel-title">Change your name</h2>
+              <NameForm initial={me.name} submitLabel="Save" onDone={() => setRenaming(false)} />
             </div>
           ) : (
             <>
               <p className="playing-as">
-                Playing as <strong>{me.name}</strong>{" "}
+                {me.username ? (
+                  <>
+                    Signed in as <strong>{me.name}</strong> <span className="faint">@{me.username}</span>
+                  </>
+                ) : (
+                  <>
+                    Playing as <strong>{me.name}</strong> <span className="faint">(guest)</span>
+                  </>
+                )}{" "}
                 <button type="button" className="link-btn" onClick={() => setRenaming(true)}>
-                  change
+                  change name
                 </button>
                 {" · "}
-                <DeviceLink />
+                <a className="link-btn" {...linkTo("/account")}>
+                  {me.username ? "account" : "create account"}
+                </a>
               </p>
+              {!me.username && (
+                <p className="guest-note small">
+                  Guest history stays on this browser only. <a {...linkTo("/account")}>Create an account</a> to keep your games and stats on every device.
+                </p>
+              )}
               <HostPanel />
               <JoinPanel />
             </>
@@ -174,7 +194,7 @@ function RecentSessions({ playerId }: { playerId: string }) {
 }
 
 /** Creates a one-time link that signs another device in as this player. */
-function DeviceLink() {
+export function DeviceLink() {
   const [state, setState] = useState<{ url: string; copied: boolean } | { error: string } | null>(null);
   async function make() {
     try {

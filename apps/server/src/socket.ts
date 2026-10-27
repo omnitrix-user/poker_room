@@ -11,6 +11,8 @@ import type { Store } from "./store.ts";
 interface SocketData {
   playerId: string;
   roomId: string | null;
+  /** When the session cookie was last confirmed valid (epoch ms). */
+  checkedAt: number;
 }
 
 type ClientToServer = { [K in ClientEventName]: (raw: unknown, ack?: (a: Ack) => void) => void };
@@ -31,7 +33,13 @@ function originAllowed(origin: string | undefined, host: string | undefined, all
   }
 }
 
-export function attachSockets(http: HttpServer, store: Store, rooms: RoomManager, allowedOrigins: string[] = []) {
+export function attachSockets(
+  http: HttpServer,
+  store: Store,
+  rooms: RoomManager,
+  allowedOrigins: string[] = [],
+  sessionRecheckMs = 30_000,
+) {
   const io = new Server<ClientToServer, ServerToClient, Record<string, never>, SocketData>(http, {
     serveClient: false,
     // Same-origin only: the web app is served by this server (or proxied in development).
@@ -52,6 +60,7 @@ export function attachSockets(http: HttpServer, store: Store, rooms: RoomManager
       if (!player) return next(new Error("unauthenticated"));
       socket.data.playerId = player.id;
       socket.data.roomId = null;
+      socket.data.checkedAt = Date.now();
       next();
     } catch (err) {
       log.error("socket auth failed", errInfo(err));
@@ -71,6 +80,17 @@ export function attachSockets(http: HttpServer, store: Store, rooms: RoomManager
       const listener = async (raw: unknown, ack?: (a: Ack) => void) => {
         const reply = typeof ack === "function" ? ack : () => {};
         if (!eventLimiter.allow(socket.data.playerId)) return reply({ ok: false, code: "rate_limited", message: "Slow down a little." });
+        // A session that was signed out (logout, password change) stops working on open
+        // connections too, within `sessionRecheckMs`.
+        if (Date.now() - socket.data.checkedAt >= sessionRecheckMs) {
+          const still = await playerFromCookie(store, socket.handshake.headers.cookie);
+          if (!still || still.id !== socket.data.playerId) {
+            reply({ ok: false, code: "unauthenticated", message: "You've been signed out. Refresh to continue." });
+            socket.disconnect(true);
+            return;
+          }
+          socket.data.checkedAt = Date.now();
+        }
         const parsed = clientEvents[event].safeParse(raw ?? {});
         if (!parsed.success) return reply({ ok: false, code: "bad_request", message: parsed.error.issues[0]?.message ?? "Invalid request." });
         try {

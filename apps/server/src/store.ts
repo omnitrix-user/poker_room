@@ -1,6 +1,7 @@
 import type { Card } from "@riverroom/engine";
 import type {
   ChatMessage,
+  Me,
   HandDetail,
   HandSummary,
   PublicHandEvent,
@@ -38,15 +39,70 @@ export class Store {
     await this.db.query(`UPDATE players SET display_name = $2 WHERE id = $1`, [playerId, name]);
   }
 
-  async playerForToken(token: string): Promise<{ id: string; name: string } | null> {
-    const rows = await this.db.query<{ id: string; name: string }>(
+  async playerForToken(token: string): Promise<Me | null> {
+    const rows = await this.db.query<Me>(
       `UPDATE auth_sessions s SET last_seen_at = now()
          FROM players p
         WHERE s.token_hash = $1 AND p.id = s.player_id
-       RETURNING p.id, p.display_name AS name`,
+       RETURNING p.id, p.display_name AS name, p.username`,
       [hashToken(token)],
     );
     return rows[0] ?? null;
+  }
+
+  // -------------------------------------------------------------------------
+  // Accounts
+
+  /** Turns an existing (guest) player into an account. Returns "taken" if the username is in use. */
+  async register(playerId: string, username: string, passwordHash: string): Promise<"ok" | "taken" | "already"> {
+    try {
+      const rows = await this.db.query(
+        `UPDATE players SET username = $2, password_hash = $3, registered_at = now() WHERE id = $1 AND username IS NULL RETURNING id`,
+        [playerId, username, passwordHash],
+      );
+      return rows.length ? "ok" : "already";
+    } catch (err) {
+      if ((err as { code?: string }).code === "23505") return "taken";
+      throw err;
+    }
+  }
+
+  async accountByUsername(username: string): Promise<{ id: string; name: string; username: string; passwordHash: string } | null> {
+    const rows = await this.db.query<{ id: string; name: string; username: string; password_hash: string }>(
+      `SELECT id, display_name AS name, username, password_hash FROM players WHERE lower(username) = lower($1)`,
+      [username],
+    );
+    const r = rows[0];
+    return r ? { id: r.id, name: r.name, username: r.username, passwordHash: r.password_hash } : null;
+  }
+
+  async passwordHashFor(playerId: string): Promise<string | null> {
+    const rows = await this.db.query<{ password_hash: string | null }>(`SELECT password_hash FROM players WHERE id = $1`, [playerId]);
+    return rows[0]?.password_hash ?? null;
+  }
+
+  async setPassword(playerId: string, passwordHash: string): Promise<void> {
+    await this.db.query(`UPDATE players SET password_hash = $2 WHERE id = $1`, [playerId, passwordHash]);
+  }
+
+  /** Opens a new session (another device or a fresh login) for a player. */
+  async createSession(playerId: string): Promise<string> {
+    const token = newToken();
+    await this.db.query(`INSERT INTO auth_sessions (token_hash, player_id) VALUES ($1, $2)`, [hashToken(token), playerId]);
+    return token;
+  }
+
+  async revokeSession(token: string): Promise<void> {
+    await this.db.query(`DELETE FROM auth_sessions WHERE token_hash = $1`, [hashToken(token)]);
+  }
+
+  /** Signs the player out everywhere except the given session (after a password change). */
+  async revokeOtherSessions(playerId: string, keepToken: string): Promise<number> {
+    const rows = await this.db.query(`DELETE FROM auth_sessions WHERE player_id = $1 AND token_hash <> $2 RETURNING 1`, [
+      playerId,
+      hashToken(keepToken),
+    ]);
+    return rows.length;
   }
 
   // -------------------------------------------------------------------------
@@ -394,7 +450,18 @@ export class Store {
       [playerId],
     );
     const played = sessions.filter((s) => s.hands > 0);
+    const [extra] = await this.db.query<{ biggest: number | null; best: number | null }>(
+      `SELECT (SELECT max(won) FROM hand_players WHERE player_id = $1) AS biggest,
+              (SELECT max((sh->>'category')::int)
+                 FROM hands h
+                 JOIN hand_players hp ON hp.hand_id = h.id AND hp.player_id = $1
+                 CROSS JOIN LATERAL jsonb_array_elements(coalesce(h.result->'shown', '[]'::jsonb)) sh
+                WHERE sh->>'playerId' = $1) AS best`,
+      [playerId],
+    );
     return {
+      biggestPot: extra?.biggest ?? 0,
+      bestHand: extra?.best ?? null,
       handsPlayed: hands?.played ?? 0,
       handsWon: hands?.won ?? 0,
       showdownsReached: hands?.sd ?? 0,

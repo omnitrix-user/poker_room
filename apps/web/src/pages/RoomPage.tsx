@@ -5,7 +5,7 @@ import { Wordmark } from "../components/AppBar.tsx";
 import { SidePanel, type PastHand } from "../components/HandLog.tsx";
 import { InviteBox } from "../components/InviteBox.tsx";
 import { LobbyPanel } from "../components/LobbyPanel.tsx";
-import { NameForm } from "../components/NameForm.tsx";
+import { IdentityPanel } from "../components/AccountForms.tsx";
 import { Standings } from "../components/Standings.tsx";
 import { ExtendMenu, MatchVote, RoundCounter } from "../components/MatchVote.tsx";
 import { Table } from "../components/Table.tsx";
@@ -31,8 +31,8 @@ export function RoomPage({ code }: { code: string }) {
           <h1>
             Table <span className="num">{code}</span>
           </h1>
-          <p className="muted">Pick the name your friends will see at the table.</p>
-          <NameForm submitLabel="Join table" />
+          <p className="muted">Play as a guest, or log in so this game counts towards your history everywhere.</p>
+          <IdentityPanel guestLabel="Join table" />
         </div>
       </div>
     );
@@ -310,7 +310,7 @@ function JoinError({ code, message }: { code: string; message: string }) {
         <div className="gate-card panel">
           <h1>Who's playing?</h1>
           <p className="muted">{message}</p>
-          <NameForm submitLabel="Join table" onDone={() => location.reload()} />
+          <IdentityPanel guestLabel="Join table" onDone={() => location.reload()} />
         </div>
       </div>
     );

@@ -23,6 +23,8 @@ export interface Config {
   finalVoteWindowMs: number;
   /** How long an extension vote stays open. */
   voteMs: number;
+  /** How often open connections re-confirm their session is still valid. */
+  sessionRecheckMs: number;
   /** Where the built web app lives; served by the same process in production. */
   webDist: string | undefined;
   trustProxy: boolean;
@@ -48,6 +50,7 @@ export function loadConfig(env = process.env): Config {
     showdownPauseMs: Number(env.SHOWDOWN_PAUSE_MS ?? 2500),
     finalVoteWindowMs: Number(env.FINAL_VOTE_SECONDS ?? 20) * 1000,
     voteMs: Number(env.VOTE_SECONDS ?? 45) * 1000,
+    sessionRecheckMs: 30_000,
     webDist: env.WEB_DIST ? path.resolve(env.WEB_DIST) : isProd ? path.resolve("apps/web/dist") : undefined,
     trustProxy: env.TRUST_PROXY === "1" || env.TRUST_PROXY === "true",
     allowedOrigins: (env.ALLOWED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),

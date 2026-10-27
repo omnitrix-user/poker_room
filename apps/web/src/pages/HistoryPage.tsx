@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import type { HandDetail, HandSummary, SessionSummary, StatsResponse } from "@riverroom/protocol";
 import { AppBar } from "../components/AppBar.tsx";
 import { describeEvent, resultLines } from "../components/HandLog.tsx";
-import { NameForm } from "../components/NameForm.tsx";
+import { IdentityPanel } from "../components/AccountForms.tsx";
+import { CATEGORY_NAMES, type HandCategory } from "@riverroom/engine";
 import { PlayingCard } from "../components/PlayingCard.tsx";
 import { api } from "../lib/api.ts";
 import { chips, count, relativeDate, signed } from "../lib/format.ts";
@@ -33,8 +34,8 @@ function RequireMe({ children }: { children: (id: string) => React.ReactNode }) 
   if (!s.me)
     return (
       <div className="panel pad narrow">
-        <p className="muted">History belongs to a player identity. Choose a name to start one.</p>
-        <NameForm />
+        <p className="muted">Log in to see your games and stats, or start as a guest.</p>
+        <IdentityPanel defaultMode="login" />
       </div>
     );
   return <>{children(s.me.id)}</>;
@@ -53,6 +54,8 @@ export function HistoryPage() {
 }
 
 function HistoryBody({ playerId }: { playerId: string }) {
+  const session = useMe();
+  const guest = session.status === "ready" && session.me && !session.me.username;
   const stats = useApi<StatsResponse>("/api/stats");
   const sessions = useApi<{ sessions: SessionSummary[] }>("/api/history");
   if (stats.state === "error" || sessions.state === "error")
@@ -73,6 +76,12 @@ function HistoryBody({ playerId }: { playerId: string }) {
   }
   return (
     <>
+      {guest && (
+        <p className="guest-note small">
+          You're playing as a guest, so this history lives on this browser only. <a {...linkTo("/account")}>Create an account</a> to keep it on
+          every device.
+        </p>
+      )}
       <dl className="stats">
         <div>
           <dt>Hands played</dt>
@@ -97,6 +106,14 @@ function HistoryBody({ playerId }: { playerId: string }) {
         <div>
           <dt>Net profit / loss</dt>
           <dd className={`num ${s.netChips > 0 ? "pos" : s.netChips < 0 ? "neg" : ""}`}>{signed(s.netChips)}</dd>
+        </div>
+        <div>
+          <dt>Biggest pot won</dt>
+          <dd className="num">{s.biggestPot ? chips(s.biggestPot) : "—"}</dd>
+        </div>
+        <div>
+          <dt>Best hand shown</dt>
+          <dd className="best-hand">{s.bestHand !== null ? CATEGORY_NAMES[s.bestHand as HandCategory] : "—"}</dd>
         </div>
       </dl>
       <p className="faint small">

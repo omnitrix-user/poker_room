@@ -18,6 +18,10 @@ export function sessionCookie(token: string, secure: boolean): string {
   });
 }
 
+export function clearSessionCookie(secure: boolean): string {
+  return serialize(SESSION_COOKIE, "", { httpOnly: true, sameSite: "lax", secure, path: "/", maxAge: 0 });
+}
+
 export async function playerFromCookie(store: Store, header: string | undefined) {
   const token = tokenFromCookieHeader(header);
   return token ? store.playerForToken(token) : null;

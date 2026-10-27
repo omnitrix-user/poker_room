@@ -22,6 +22,18 @@ export const displayNameSchema = z
   .max(20, "Keep it to 20 characters.")
   .regex(/^[\p{L}\p{N} ._'-]+$/u, "Use letters, numbers, spaces, and . _ ' - only.");
 
+export const usernameSchema = z
+  .string()
+  .trim()
+  .min(3, "Usernames need at least 3 characters.")
+  .max(20, "Keep your username to 20 characters.")
+  .regex(/^[A-Za-z0-9_.-]+$/, "Use letters, numbers, and . _ - only (no spaces).");
+
+export const passwordSchema = z
+  .string()
+  .min(8, "Use at least 8 characters for your password.")
+  .max(128, "That password is too long.");
+
 export const roomSettingsSchema = z
   .object({
     smallBlind: z.number().int().min(1).max(100_000),
@@ -303,7 +315,19 @@ export interface HandDetail {
   result: PublicHandResult | null;
 }
 
+export interface Me {
+  id: string;
+  /** Name shown at the table. */
+  name: string;
+  /** Login name when the player has an account; null for guests. */
+  username: string | null;
+}
+
 export interface StatsResponse {
+  /** Biggest single pot share won (play-money rupees). */
+  biggestPot: number;
+  /** Best hand category shown down (engine HandCategory), or null. */
+  bestHand: number | null;
   handsPlayed: number;
   handsWon: number;
   showdownsReached: number;

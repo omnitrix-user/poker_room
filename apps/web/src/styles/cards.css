@@ -35,57 +35,56 @@
 }
 .pcard .idx {
   position: absolute;
+  top: calc(var(--w) * 0.06);
+  left: calc(var(--w) * 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: calc(var(--w) * 0.03);
   line-height: 1;
-  gap: calc(var(--w) * 0.02);
 }
 .pcard .idx b {
-  font-family: var(--font-display);
-  font-weight: 640;
-  font-size: calc(var(--w) * 0.3);
-  letter-spacing: -0.04em;
-  font-variation-settings: "opsz" 24;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: calc(var(--w) * 0.36);
+  letter-spacing: -0.03em;
+}
+.pcard .idx b.ten {
+  letter-spacing: -0.05em;
+  margin-left: calc(var(--w) * -0.025);
+  font-size: calc(var(--w) * 0.32);
 }
 .pcard .idx svg {
-  width: calc(var(--w) * 0.19);
-  height: calc(var(--w) * 0.19);
+  width: calc(var(--w) * 0.22);
+  height: calc(var(--w) * 0.22);
 }
-.pcard .tl {
-  top: calc(var(--w) * 0.07);
-  left: calc(var(--w) * 0.07);
-}
-.pcard .br {
-  bottom: calc(var(--w) * 0.07);
-  right: calc(var(--w) * 0.07);
-  transform: rotate(180deg);
-}
+/* One large, calm suit symbol instead of a mirrored second index. */
 .pcard .pip {
   position: absolute;
-  width: calc(var(--w) * 0.46);
-  height: calc(var(--w) * 0.46);
-  right: calc(var(--w) * 0.12);
-  bottom: calc(var(--w) * 0.3);
-  opacity: 0.92;
+  width: calc(var(--w) * 0.52);
+  height: calc(var(--w) * 0.52);
+  right: calc(var(--w) * 0.1);
+  bottom: calc(var(--w) * 0.12);
 }
-/* Tiny cards: indices only, larger. */
-.pcard.xs .br,
-.pcard.xs .pip,
-.pcard.sm .br {
+/* Tiny cards (history, logs): rank and suit only, side by side. */
+.pcard.xs .pip {
   display: none;
 }
+.pcard.xs .idx {
+  inset: 0;
+  justify-content: center;
+  gap: 1px;
+}
 .pcard.xs .idx b {
-  font-size: calc(var(--w) * 0.5);
+  font-size: calc(var(--w) * 0.46);
 }
 .pcard.xs .idx svg {
-  width: calc(var(--w) * 0.4);
-  height: calc(var(--w) * 0.4);
+  width: calc(var(--w) * 0.36);
+  height: calc(var(--w) * 0.36);
 }
 .pcard.sm .pip {
-  width: calc(var(--w) * 0.5);
-  height: calc(var(--w) * 0.5);
-  right: calc(var(--w) * 0.1);
+  width: calc(var(--w) * 0.46);
+  height: calc(var(--w) * 0.46);
   bottom: calc(var(--w) * 0.1);
 }
 

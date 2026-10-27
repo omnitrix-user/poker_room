@@ -8,3 +8,4 @@ playwright-report
 .neon
 .env.local
 .env.*.local
+.claude

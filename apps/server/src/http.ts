@@ -1,15 +1,16 @@
 import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { DEFAULT_SETTINGS, displayNameSchema, roomSettingsSchema } from "@riverroom/protocol";
-import { playerFromCookie, sessionCookie, tokenFromCookieHeader } from "./auth.ts";
+import { DEFAULT_SETTINGS, displayNameSchema, passwordSchema, roomSettingsSchema, usernameSchema } from "@riverroom/protocol";
+import { clearSessionCookie, playerFromCookie, sessionCookie, tokenFromCookieHeader } from "./auth.ts";
+import { dummyHash, hashPassword, verifyPassword } from "./passwords.ts";
 import type { Config } from "./config.ts";
 import { errInfo, log } from "./log.ts";
 import { RateLimiter } from "./ratelimit.ts";
 import type { RoomManager } from "./rooms.ts";
 import type { Store } from "./store.ts";
 
-type Authed = Request & { player: { id: string; name: string } };
+type Authed = Request & { player: { id: string; name: string; username: string | null } };
 
 export function createHttpApp(config: Config, store: Store, rooms: RoomManager) {
   const app = express();
@@ -34,6 +35,9 @@ export function createHttpApp(config: Config, store: Store, rooms: RoomManager) 
   const sessionLimiter = new RateLimiter(20, 10 * 60_000);
   const createLimiter = new RateLimiter(10, 10 * 60_000);
   const linkLimiter = new RateLimiter(10, 10 * 60_000);
+  const registerLimiter = new RateLimiter(10, 10 * 60_000);
+  const loginIpLimiter = new RateLimiter(30, 10 * 60_000);
+  const loginUserLimiter = new RateLimiter(10, 10 * 60_000);
 
   const wrap =
     (fn: (req: Request, res: Response) => Promise<unknown>) =>
@@ -68,12 +72,94 @@ export function createHttpApp(config: Config, store: Store, rooms: RoomManager) 
       const existing = await playerFromCookie(store, req.headers.cookie);
       if (existing) {
         await store.renamePlayer(existing.id, name);
-        return res.json({ player: { id: existing.id, name } });
+        return res.json({ player: { id: existing.id, name, username: existing.username } });
       }
       const { playerId, token } = await store.createGuest(name);
       res.setHeader("Set-Cookie", sessionCookie(token, config.isProd));
       log.info("guest session created", { playerId });
-      res.json({ player: { id: playerId, name } });
+      res.json({ player: { id: playerId, name, username: null } });
+    }),
+  );
+
+  // -------------------------------------------------------------------------
+  // Accounts (optional): username + password so history follows a player across devices.
+
+  app.post(
+    "/api/account/register",
+    wrap(async (req, res) => {
+      if (!registerLimiter.allow(req.ip ?? "unknown")) return res.status(429).json({ error: "Too many attempts. Try again in a few minutes." });
+      const parsed = z
+        .object({ username: usernameSchema, password: passwordSchema, name: displayNameSchema.optional() })
+        .safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Check your details." });
+      const { username, password, name } = parsed.data;
+      const existing = await playerFromCookie(store, req.headers.cookie);
+      if (existing?.username) return res.status(409).json({ error: "You're already signed in with an account." });
+      if (await store.accountByUsername(username)) return res.status(409).json({ error: "That username is taken. Try another one." });
+      const passwordHash = await hashPassword(password);
+      // A guest keeps its identity (and history); someone without a session starts fresh.
+      let playerId = existing?.id;
+      let displayName = existing?.name ?? name ?? username;
+      let token: string | null = null;
+      if (!playerId) {
+        const guest = await store.createGuest(displayName);
+        playerId = guest.playerId;
+        token = guest.token;
+      } else if (name) {
+        await store.renamePlayer(playerId, name);
+        displayName = name;
+      }
+      const result = await store.register(playerId, username, passwordHash);
+      if (result === "taken") return res.status(409).json({ error: "That username is taken. Try another one." });
+      if (result === "already") return res.status(409).json({ error: "You're already signed in with an account." });
+      if (token) res.setHeader("Set-Cookie", sessionCookie(token, config.isProd));
+      log.info("account created", { playerId, fromGuest: Boolean(existing) });
+      res.json({ player: { id: playerId, name: displayName, username } });
+    }),
+  );
+
+  app.post(
+    "/api/account/login",
+    wrap(async (req, res) => {
+      const parsed = z.object({ username: z.string().trim().min(1).max(40), password: z.string().min(1).max(128) }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Enter your username and password." });
+      const { username, password } = parsed.data;
+      if (!loginIpLimiter.allow(req.ip ?? "unknown") || !loginUserLimiter.allow(username.toLowerCase()))
+        return res.status(429).json({ error: "Too many login attempts. Wait a few minutes and try again." });
+      const account = await store.accountByUsername(username);
+      // Always run one hash check so response time doesn't reveal whether the username exists.
+      const ok = account ? await verifyPassword(password, account.passwordHash) : (await verifyPassword(password, await dummyHash()), false);
+      if (!account || !ok) return res.status(401).json({ error: "Wrong username or password." });
+      const token = await store.createSession(account.id);
+      res.setHeader("Set-Cookie", sessionCookie(token, config.isProd));
+      log.info("account login", { playerId: account.id });
+      res.json({ player: { id: account.id, name: account.name, username: account.username } });
+    }),
+  );
+
+  app.post(
+    "/api/account/logout",
+    wrap(async (req, res) => {
+      const token = tokenFromCookieHeader(req.headers.cookie);
+      if (token) await store.revokeSession(token);
+      res.setHeader("Set-Cookie", clearSessionCookie(config.isProd));
+      res.json({ ok: true });
+    }),
+  );
+
+  app.post(
+    "/api/account/password",
+    authed(async (req, res) => {
+      if (!req.player.username) return res.status(400).json({ error: "Create an account first." });
+      const parsed = z.object({ current: z.string().min(1).max(128), next: passwordSchema }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Check your passwords." });
+      if (!loginUserLimiter.allow(req.player.username.toLowerCase())) return res.status(429).json({ error: "Too many attempts. Wait a few minutes." });
+      const stored = await store.passwordHashFor(req.player.id);
+      if (!stored || !(await verifyPassword(parsed.data.current, stored))) return res.status(401).json({ error: "Your current password is wrong." });
+      await store.setPassword(req.player.id, await hashPassword(parsed.data.next));
+      // Other devices must sign in again with the new password.
+      const signedOut = await store.revokeOtherSessions(req.player.id, tokenFromCookieHeader(req.headers.cookie)!);
+      res.json({ ok: true, signedOutElsewhere: signedOut });
     }),
   );
 

@@ -6,7 +6,8 @@ A private, browser-based Texas Hold'em club. Open a table, send friends the link
 
 ## What's in it
 
-- **Guest identity** backed by a server-issued HttpOnly session cookie (no sign-up; see limitations).
+- **Accounts or guests**: play instantly as a guest, or create an account (username + password) so your games, history and stats follow you to any device. A guest who creates an account keeps everything they've played. Passwords are stored only as salted scrypt hashes; logins are rate-limited; changing your password signs out your other devices.
+- **Personal stats** from recorded hands: hands played, hands and showdowns won, net profit/loss, sessions, biggest pot won, and best hand shown.
 - **Private rooms** with unguessable invite codes, 2–8 seats, a waiting room with seat choice and ready states, host-only settings and start.
 - **Matches with a set length**: the host picks the number of rounds (one round = one hand dealt; 10–100). The top bar shows "Round 7 / 20". Anyone can propose playing more rounds (+5/+10/+20); it happens **only if every player at the table votes yes** — a single "no" or a 45-second timeout cancels it. After the final round there's a 20-second window to call that vote before the match ends.
 - **Final leaderboard** at the end of every match, ordered from biggest profit to biggest loss, with buy-ins, final stacks and profit/loss in ₹. The same leaderboard is kept in History.
@@ -144,7 +145,7 @@ At the time of writing, on macOS with Node 24.8:
 
 ## Known limitations
 
-- **Identity is guest-based.** It lives in a browser cookie. You can move it to another device with a one-time link, but if every device's cookies are cleared it's gone — there's no email/password recovery. No auth provider was configured.
+- **No password recovery by email.** Accounts use a username and password only (no email is collected), so a forgotten password can't be reset. Guests who never create an account lose their identity if their browser's cookies are cleared.
 - **Single process, in-memory room actors and rate limits.** No horizontal scaling (not needed for friends' tables).
 - **Not included:** straddles, run-it-twice, time banks.
 - **Extension votes** need every seated player who is present; a player whose connection has been gone past the grace period isn't asked (and so can't block it).

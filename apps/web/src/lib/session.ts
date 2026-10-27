@@ -1,10 +1,8 @@
 import { useSyncExternalStore } from "react";
+import type { Me } from "@riverroom/protocol";
 import { api } from "./api.ts";
 
-export interface Me {
-  id: string;
-  name: string;
-}
+export type { Me };
 
 type State = { status: "loading" } | { status: "ready"; me: Me | null };
 
@@ -40,4 +38,27 @@ export async function establishIdentity(name: string): Promise<Me> {
   const r = await api<{ player: Me }>("/api/session", { method: "POST", body: { name } });
   set({ status: "ready", me: r.player });
   return r.player;
+}
+
+/** Turns the current guest into an account (or creates a fresh account when signed out). */
+export async function register(username: string, password: string, name?: string): Promise<Me> {
+  const r = await api<{ player: Me }>("/api/account/register", { method: "POST", body: { username, password, ...(name ? { name } : {}) } });
+  set({ status: "ready", me: r.player });
+  return r.player;
+}
+
+export async function login(username: string, password: string): Promise<Me> {
+  const r = await api<{ player: Me }>("/api/account/login", { method: "POST", body: { username, password } });
+  set({ status: "ready", me: r.player });
+  return r.player;
+}
+
+export async function logout(): Promise<void> {
+  await api("/api/account/logout", { method: "POST", body: {} });
+  set({ status: "ready", me: null });
+}
+
+export async function changePassword(current: string, next: string): Promise<number> {
+  const r = await api<{ signedOutElsewhere: number }>("/api/account/password", { method: "POST", body: { current, next } });
+  return r.signedOutElsewhere;
 }

@@ -50,7 +50,11 @@ Consequences:
 - The history API returns only public events, shown cards, and the viewer's own decrypted cards — never the snapshot.
 - Tests assert that no payload received by a client contains the opponent's exact holding or the word `deck`; the E2E test asserts the host's cards don't exist anywhere in the guest's DOM.
 
-## Identity
+## Identity and accounts
+
+Players start as guests and may turn their guest identity into an account (username + password) at any time, which keeps all of that guest's history. Accounts live on the same `players` row (`username` unique case-insensitively, `password_hash`, `registered_at`). Passwords are hashed with scrypt (N=2^14, r=8, p=1, random 16-byte salt, parameters stored with the hash) and compared in constant time; logins for unknown usernames still run a hash so response time doesn't reveal which usernames exist. Logins are rate-limited per IP and per username. Logging in creates a new session token on that device; logging out deletes it; changing the password deletes every other session, and open game connections re-check their session at least every 30 seconds so a signed-out device stops playing. No email is collected, so there is no password reset.
+
+### Guest sessions
 
 Guest identities backed by a server-issued session: `POST /api/session` creates a player and a 256-bit random token, stores only its SHA-256 hash, and sets an `HttpOnly; SameSite=Lax` (and `Secure` in production) cookie. Sockets authenticate from that cookie during the handshake; the payload never carries a player id. If the same player opens a second tab, the newer tab takes over and the older one is refused for further actions.
 

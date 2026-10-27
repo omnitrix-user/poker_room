@@ -22,6 +22,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     showdownPauseMs: 60,
     finalVoteWindowMs: 400,
     voteMs: 500,
+    sessionRecheckMs: 30_000,
     webDist: undefined,
     trustProxy: false,
     allowedOrigins: [],
