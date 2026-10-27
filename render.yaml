@@ -1,0 +1,26 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repo.
+# Render asks only for the two database URLs (copy them from .env.local); everything else is preset.
+services:
+  - type: web
+    name: riverroom
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: TRUST_PROXY
+        value: "1"
+      # Encrypts saved games; Render generates a random value once and keeps it.
+      - key: APP_SECRET
+        generateValue: true
+      # From Neon (see .env.local). Never commit these values.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false
