@@ -1,10 +1,31 @@
 # RiverRoom
 
-DEMO VIDEO LINK : https://drive.google.com/drive/folders/1Te4_5L3nDgTQ4HjpSTNB8FbDw5OE6viP?q=sharedwith:public%20parent:1Te4_5L3nDgTQ4HjpSTNB8FbDw5OE6viP
-
 **Your friends. Your table. Your game.**
 
 A private, browser-based Texas Hold'em club. Open a table, send friends the link or 8-character code, and play no-limit hold'em in real time. Stakes are shown in **play-money rupees (₹, Indian digit grouping)** — RiverRoom never takes deposits, makes payments or cash-outs, or awards prizes; nothing in the app has real monetary value.
+
+**Live:** <https://YOUR-RENDER-URL.onrender.com> <!-- replace with your Render URL -->
+
+## The problem
+
+Friends who want to play hold'em together online are stuck choosing between real-money apps (gambling, deposits, legal grey areas), free apps that drop you into public lobbies full of strangers, ads and in-app purchases, or playing in person where someone has to deal, track chips, get side pots right, and settle who's up at the end.
+
+RiverRoom is a private table for people who already know each other: no install, no real money, no strangers. The server deals, enforces the full no-limit rules, keeps every player's hidden cards hidden, survives dropped phone connections, and records the results so the leaderboard and stats settle themselves.
+
+## Tech stack
+
+| Layer | Technology | Why |
+| --- | --- | --- |
+| Language | **TypeScript** (strict), npm workspaces monorepo | One type system shared by engine, protocol, server and client. |
+| Poker engine | Pure TypeScript package, no I/O | Deterministic and easy to fuzz-test in isolation. |
+| Frontend | **React 19**, **Vite 7** | Fast dev loop; responsive table with a dedicated portrait layout. |
+| Real-time | **Socket.IO 4** | WebSockets with reconnection; per-player views so hidden cards never leave the server. |
+| Backend | **Node.js 22+**, **Express 5** | API, auth, health check, and serves the built SPA from the same origin. |
+| Validation | **Zod 4** | Same schemas validate client payloads on both sides. |
+| Database | **PostgreSQL** — **Neon** (serverless Postgres) in production, **PGlite** (Postgres in WASM) locally | Zero-setup local dev, managed Postgres in prod. |
+| Security | Node `crypto` — salted **scrypt** password hashes, encrypted game snapshots and hole cards, `HttpOnly; Secure; SameSite=Lax` cookies, rate-limited logins | |
+| Testing | **Vitest** (unit, integration, seeded fuzzer), **Playwright** (browser E2E) | |
+| Build & deploy | **esbuild** (server bundle), **Docker**, **Render** (blueprint in `render.yaml`) | |
 
 ## What's in it
 
@@ -35,7 +56,7 @@ A private, browser-based Texas Hold'em club. Open a table, send friends the link
 
 - Node.js **22.12+** (developed on 24.8) and npm 10+.
 - Nothing else for local development — an embedded Postgres (PGlite) is used when `DATABASE_URL` isn't set.
-- For production: a Postgres database (recommended) or a persistent volume for the embedded one.
+- For production: a Postgres database (Neon is what the live deployment uses) or a persistent volume for the embedded one.
 
 ## Open it in your IDE
 
@@ -53,7 +74,7 @@ npm run dev
 
 This starts the game server on `:3001` and the web app on `:5173` (override with `API_PORT` / `PORT`). Open http://localhost:5173, pick a name, open a table, and open the invite link in a **different browser or a private window** to join as a second player (tabs in the same browser share one identity).
 
-Local data lives in `.data/` (git-ignored). Delete it to start fresh.
+Local data lives in `.data/` (git-ignored). Delete it to start fresh. If you put Neon connection strings in `.env.local`, the dev server uses that database instead of the embedded one.
 
 ## Commands
 
@@ -77,7 +98,8 @@ See [`.env.example`](.env.example). The important ones:
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `APP_SECRET` | — | **Required in production.** ≥32 characters. Encrypts live-game snapshots and stored hole cards. Changing it makes in-progress games unrecoverable. |
-| `DATABASE_URL` | unset | Postgres connection string. Unset → embedded Postgres in `DATA_DIR`. Add `?sslmode=require` for TLS. |
+| `DATABASE_URL` | unset | Postgres connection string (Neon pooled URL in production). Unset → embedded Postgres in `DATA_DIR`. Add `?sslmode=require` for TLS. |
+| `DATABASE_URL_UNPOOLED` | unset | Neon's direct (non-pooled) connection string. Set alongside `DATABASE_URL` when using Neon. |
 | `DATA_DIR` | `.data/pglite` | Embedded database directory (only without `DATABASE_URL`). Must be on persistent storage. |
 | `PORT` | `3001` | HTTP + WebSocket port. |
 | `RECONNECT_GRACE_SECONDS` | `30` | How long a disconnected player keeps their turn. |
@@ -98,16 +120,34 @@ Migrations live in `apps/server/src/migrations.ts` and run automatically at star
 DATABASE_URL=postgres://user:pass@host:5432/riverroom APP_SECRET=... npm start
 ```
 
+Production runs on **Neon**. `neon.ts` gives new non-default Neon branches a 7-day TTL so throwaway branches clean themselves up.
+
 ## Deploying
 
 RiverRoom is one long-running Node process that serves the API, the WebSocket endpoint, and the built web app from the same origin. It needs a host that supports persistent processes and WebSockets (Render, Railway, Fly.io, a VPS…), not a serverless function platform.
+
+### Render + Neon (how the live app is deployed)
+
+`render.yaml` is a Render Blueprint:
+
+1. In Render: **Dashboard → New → Blueprint** and pick this repo.
+2. Render asks for `DATABASE_URL` and `DATABASE_URL_UNPOOLED` — paste them from your Neon project (or `.env.local`). Never commit these values.
+3. Everything else is preset: Node 22, Singapore region, `TRUST_PROXY=1`, a generated `APP_SECRET`, build with `npm ci --include=dev && npm run build`, start with `npm start`, health check at `/api/health`, auto-deploy from `main`.
+
+Note: on Render's free plan the service sleeps after a period of inactivity, so the first visit after a while takes a little longer to load.
+
+### Any other host
 
 1. `npm ci && npm run build`
 2. Set `NODE_ENV=production`, `APP_SECRET`, and `DATABASE_URL` (or a volume-backed `DATA_DIR`).
 3. `npm start` (or `node apps/server/dist/server.js`). Health check: `GET /api/health`.
 4. Serve it over HTTPS (the session cookie is `Secure` in production). Set `TRUST_PROXY=1` behind a proxy.
 
+A `railway.json` is also included (Dockerfile build, `/api/health` health check, one replica).
+
 Run **one instance**. Room state lives in that process; multiple instances would each think they own a room.
+
+### Docker
 
 A `Dockerfile` is included (build → slim runtime, data volume at `/data`). It has been built and run: the image served the app in production mode against a PostgreSQL 15 container, and the full browser E2E suite passed against it:
 
@@ -120,8 +160,6 @@ docker run -p 3001:3001 -e APP_SECRET=... -e DATABASE_URL=postgres://... riverro
 ```
 
 To run the browser tests against any running deployment: `E2E_BASE_URL=http://localhost:3001 npm run test:e2e`.
-
-**Deployment status:** not deployed. No hosting credentials or infrastructure were provided, so there is no public URL.
 
 ## Project layout
 
@@ -149,6 +187,7 @@ At the time of writing, on macOS with Node 24.8:
 
 - **No password recovery by email.** Accounts use a username and password only (no email is collected), so a forgotten password can't be reset. Guests who never create an account lose their identity if their browser's cookies are cleared.
 - **Single process, in-memory room actors and rate limits.** No horizontal scaling (not needed for friends' tables).
+- **Free-tier hosting cold starts.** The Render free plan sleeps when idle; the first request after that is slow.
 - **Not included:** straddles, run-it-twice, time banks.
 - **Extension votes** need every seated player who is present; a player whose connection has been gone past the grace period isn't asked (and so can't block it).
 - **Postgres verification:** the default suite uses PGlite (Postgres 18 in WASM); the full server suite has also been run against a real **PostgreSQL 15** server (`npm run test:postgres`, all passing).
