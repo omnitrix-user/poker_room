@@ -4,7 +4,8 @@
 
 A private, browser-based Texas Hold'em club. Open a table, send friends the link or 8-character code, and play no-limit hold'em in real time. Stakes are shown in **play-money rupees (₹, Indian digit grouping)** — RiverRoom never takes deposits, makes payments or cash-outs, or awards prizes; nothing in the app has real monetary value.
 
-**Live:** <https://YOUR-RENDER-URL.onrender.com> <!-- replace with your Render URL -->
+**Live:** <https://riverroom.onrender.com/> <!-- replace with your Render URL -->
+DEMO_VIDEO_LINK : <https://drive.google.com/drive/folders/1Te4_5L3nDgTQ4HjpSTNB8FbDw5OE6viP?q=sharedwith:public%20parent:1Te4_5L3nDgTQ4HjpSTNB8FbDw5OE6viP>
 
 ## The problem
 
